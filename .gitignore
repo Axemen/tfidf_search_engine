@@ -1,2 +1,6 @@
 data/
 .vscode
+indexs/
+test_docs/
+
+*.npz
