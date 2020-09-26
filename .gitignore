@@ -3,6 +3,8 @@ data/
 indexs/
 test_docs/
 
+*.ipynb
+
 *.npz
 
 __pycache__
