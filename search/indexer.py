@@ -1,22 +1,21 @@
 from __future__ import annotations
 
-from io import FileIO
 import json
 import re
-from collections import Counter, defaultdict, namedtuple
+from collections import defaultdict, Counter, namedtuple
+from io import FileIO
 from pathlib import Path
 from string import whitespace
-from typing import Dict, Iterable, List, Union, Type
-from _pytest.nodes import File
+from typing import Dict, Iterable, List, Union
+from unittest.loader import defaultTestLoader
 
 import numpy as np
 import scipy.sparse as sp
+import joblib
+from tqdm import tqdm
 
-# from ._stopwords import STOPWORDS
-from .vectorizers import TfidfVectorizer
-
-
-Document = namedtuple("Document", ["id", "path"])
+from search.util import Preprocesser
+from search.vectorizers import TfidfVectorizer
 
 
 class Indexer:
@@ -78,68 +77,68 @@ class Indexer:
     def load_index(self):
         raise NotImplementedError()
 
+class Doc:
+    def __init__(self, id, tf) -> None:
+        self.id = id
+        self.tf = tf
 
 class InvertedIndex:
-    """ 
-    {
-        "term": set[ids]
-    }
-    """
     def __init__(self, data: Dict = None) -> None:
         self._table = defaultdict(set)
         self._doc_paths = {}
-        
+        self.preprocesser = Preprocesser()
 
     @staticmethod
-    def load(path: Union[str, Path, FileIO]) -> InvertedIndex:
-        ii = InvertedIndex()
+    def load(path: str) -> InvertedIndex:
+        return joblib.load(path)
 
-        if type(path) == str or type(path) == Path:
-            data = json.load(open(path, 'r'))
-        else:
-            data = json.load(path)
-        
-        for k in data:
-            data[k] = set(data[k])
+    def save(self, path: Union[str, Path]) -> None:
+        joblib.dump(self, path)
 
-        ii._table = data
-        return ii
-
-    def save(self, path:Union[str, Path]) -> None:
-
-        data = {k:list(v) for k, v in self._table.items()}
-
-        json.dump(data, open(path, 'w'))
-
-    def lookup(self, terms:Iterable[str]) -> set:
-        results = set()
-
+    def lookup(self, terms: Iterable[str]) -> set:
+        scores = defaultdict(int)
         for term in terms:
-            results.update(self._table[term])
+            term = self.preprocesser.stemmer.stem(term)
+            for d in self._table[term]:
+                scores[d.id] += d.tf * self.idf_scores[term]
 
-        return results
+        results = sorted(scores, key=scores.get, reverse=True)
+        return [self._doc_paths[k] for k in results]
 
-
-
-    def add(self, path:Union[str, Path], encoding='utf-8') -> None:
-
-        if type(path) == str:
-            doc = Path(path).read_text(encoding=encoding)
-
+    def index_file(self, path: Union[str, Path], encoding="utf-8", update_idfs=True) -> None:
+        path = Path(path)
+        doc = path.read_text(encoding)
+        doc = list(self.preprocesser.preprocess(doc))
         doc_id = len(self._doc_paths)
-        self._doc_paths[doc_id] = path
-
+        self._doc_paths[doc_id] = str(path)
+        tfs = Counter(doc)
         for term in doc:
-            self._table[term].add(doc_id)
+            self._table[term].add(Doc(id=doc_id, tf=tfs[term]))
 
-    def remove(self, doc_id:int) -> None:
-        pass
+        if update_idfs:
+            self.calc_idfs()
 
+    def index_dir(self, path:Union[str, Path], verbose=True) -> None:
+        path = Path(path)
+        if not path.is_dir():
+            raise FileNotFoundError("This is a file not a directory")
+        
+        print("Indexing Files")
+        for p in tqdm(list(path.glob("*"))[:10000], disable=not verbose):
+            self.index_file(p, update_idfs=False)
 
-if __name__ == "__main__":
+        self.calc_idfs()
 
-    indexer = Indexer("./indices")
+    def remove(self, doc_id: int) -> None:
+        for k in self._table:
+            for d in self._table[k]:
+                if d.id == doc_id:
+                    self._table[k].remove(d)
 
-    doc = Path("E:/tfidf_search_data/opinions/A  A ACOUSTICS INC P")
+    def calc_idfs(self):
+        # idf = log( num_docs + 1 / doc_freq + 1 ) + 1
+        num_docs = len(self._doc_paths)
 
-    indexer.index_document(doc)
+        self.idf_scores = {
+            term: (np.log((num_docs + 1) / len(term) + 1) + 1) for term in self._table
+        }

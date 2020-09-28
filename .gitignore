@@ -7,8 +7,9 @@ test_docs/
 
 *.npz
 
+
 __pycache__
 .ipynb_checkpoints
 .pytest_cache
-
+test.py
 /indices

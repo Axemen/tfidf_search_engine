@@ -42,7 +42,6 @@ def test_ii_save():
 
 def test_ii_lookup():
     ii = InvertedIndex.load(StringIO(data))
-
-    results = ii.lookup(["one", "five"])
-    print(results)
+    assert ii._table
+    results = ii.lookup(['three', 'four', 'five', 'zero'])
     assert results, "results were not returned"

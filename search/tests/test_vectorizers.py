@@ -4,7 +4,7 @@ from tqdm import tqdm
 
 corpus = [
         path.read_text(encoding="utf-8")
-        for path in tqdm(list(Path(r"E:\tfidf_search_data\opinions").glob("*"))[:200])
+        for path in tqdm(list(Path(r"E:\tfidf_search_data\opinions").glob("*"))[:20])
     ]
 
 

@@ -6,9 +6,8 @@ from typing import Iterable, List
 
 import numpy as np
 import scipy.sparse as sp
-from numpy import log
 
-from ._stopwords import STOPWORDS
+from search._stopwords import STOPWORDS
 
 np.seterr(divide="ignore")
 
@@ -45,7 +44,6 @@ class CountVectorizer:
             indptr.append(len(indices))
 
         return sp.csr_matrix((data, indices, indptr), dtype=float)
-        
 
     def fit_transform(self, corpus: Iterable[str]) -> np.ndarray:
         corpus = self.preprocess(corpus)
@@ -62,16 +60,15 @@ class CountVectorizer:
                 data.append(1)
             indptr.append(len(indices))
 
-        # Creating unfiltered count_matrix 
-        count_matrix =  sp.csr_matrix((data, indices, indptr), dtype=float)
+        # Creating unfiltered count_matrix
+        count_matrix = sp.csr_matrix((data, indices, indptr), dtype=float)
 
         # Filtering Count matrix for the top used words
         counts = count_matrix.sum(axis=0).A.flatten()
-        top_n = np.argsort(counts)[-self.max_words:]
+        top_n = np.argsort(counts)[-self.max_words :]
 
         # Filtering vocab
         self.vocab = self.filter_dict(vocab, top_n)
-        
 
         # ? refactor?
         trans_table = {}
@@ -80,18 +77,19 @@ class CountVectorizer:
                 if nk == k:
                     trans_table[nv] = v
 
-        # Sorting the order in which they will be 
+        # Sorting the order in which they will be
         # returned in the filtered_matrix
         top_n = sorted(top_n, key=lambda x: trans_table[x])
 
         filtered_counts = count_matrix[:, top_n]
-        self.shape = filtered_counts.shape # Saving shape for later use
+        self.shape = filtered_counts.shape  # Saving shape for later use
         return filtered_counts
 
-
+    # TODO switch to preprocessor class
     def tokenize(self, doc: str) -> List[str]:
         return doc.split()
 
+    # TODO switch to preprocessor class
     def preprocess(self, corpus: Iterable[str]) -> Iterable:
         for doc in corpus:
             doc = doc.lower()
@@ -121,7 +119,9 @@ class TfidfVectorizer(CountVectorizer):
     def fit(self, corpus: Iterable[str]):
         count_matrix = super().fit_transform(corpus)
         self.dfs = np.sum(count_matrix > 0, axis=0).A.flatten()
-        self.idfs = sp.csr_matrix(log((count_matrix.shape[0] + 1) / (self.dfs + 1)) + 1)
+        self.idfs = sp.csr_matrix(
+            np.log((count_matrix.shape[0] + 1) / (self.dfs + 1)) + 1
+        )
 
     def transform(self, corpus: Iterable[str]):
         """ Transforms text into a tfidf Vector matrix """
@@ -139,7 +139,9 @@ class TfidfVectorizer(CountVectorizer):
         # Fit
         count_matrix = super().fit_transform(corpus)
         self.dfs = np.sum(count_matrix > 0, axis=0).A.flatten()
-        self.idfs = sp.csr_matrix(log((count_matrix.shape[0] + 1) / (self.dfs + 1)) + 1)
+        self.idfs = sp.csr_matrix(
+            np.log((count_matrix.shape[0] + 1) / (self.dfs + 1)) + 1
+        )
         # Transform
         tfidfs = []
         for i in range(count_matrix.shape[0]):
@@ -153,4 +155,3 @@ class TfidfVectorizer(CountVectorizer):
 def euclidian_normalization(row):
     """ Perform Euclidian Normalization on an array """
     return row / np.sqrt(row.power(2).sum())
-
