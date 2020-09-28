@@ -7,6 +7,9 @@ test_docs/
 
 *.npz
 
+*.sav
+
+test_data
 
 __pycache__
 .ipynb_checkpoints
